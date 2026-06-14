@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChurnMetrics — Telecoms Churn Risk Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{
+    --teal: #0f6f6a;
+    --teal-bright: #14b8a6;
+    --teal-soft: #e0f5f3;
+    --bg: #f2faf9;
+    --surface: #ffffff;
+    --border: #dcebe9;
+    --text: #1f2e2c;
+    --muted: #7a9290;
+    --green: #3f8f5f;
+    --amber: #c98a27;
+    --red: #b8302f;
+    --radius: 10px;
+  }
+
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+  html{ background: var(--bg); overflow-x: hidden; }
+
+  body{
+    font-family: 'Inter', -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  header{
+    background: var(--teal);
+    text-align: center;
+    padding: 64px 20px 32px;
+    border-bottom: 5px solid var(--teal-bright);
+  }
+
+  header h1{
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 8vw, 3.2rem);
+    letter-spacing: 0.01em;
+    color: #ffffff;
+    word-break: keep-all;
+  }
+
+  header p{
+    margin-top: 8px;
+    font-size: 1rem;
+    color: var(--teal-soft);
+  }
+
+  main{
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+  }
+
+  .intro{
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 18px;
+    line-height: 1.6;
+  }
+
+  .intro strong{ color: var(--teal); }
+
+  .actions{
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 14px;
+  }
+
+  .regen-btn{
+    padding: 9px 16px;
+    border: 1px solid var(--teal);
+    border-radius: 8px;
+    background: var(--teal);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .regen-btn:hover{ background: var(--teal-bright); }
+
+  .kpi-grid{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  @media (min-width: 600px){
+    .kpi-grid{ grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .kpi-card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--teal);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+
+  .kpi-card.high{ border-left-color: var(--red); }
+  .kpi-card.revenue{ border-left-color: var(--amber); }
+
+  .kpi-label{
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .kpi-value{ font-size: 1.5rem; font-weight: 700; color: var(--teal); }
+  .kpi-card.high .kpi-value{ color: var(--red); }
+  .kpi-card.revenue .kpi-value{ color: var(--amber); }
+  .kpi-sub{ font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+  .panel{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .panel h2{
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: var(--teal);
+    font-weight: 700;
+  }
+
+  .chart-wrap{ position: relative; height: 200px; }
+  .chart-wrap.small{ height: 180px; }
+
+  .panel-row{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  @media (min-width: 600px){
+    .panel-row{ grid-template-columns: 1fr 1fr; }
+    .panel-row .panel{ margin-bottom: 0; }
+  }
+
+  .risk-list{ display: flex; flex-direction: column; gap: 10px; }
+
+  .risk-item{
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+
+  .risk-item:hover{ border-color: var(--teal); }
+  .risk-item.active{ border-color: var(--teal); background: var(--teal-soft); }
+
+  .risk-item .name{ font-weight: 600; }
+  .risk-item .count{ color: var(--muted); font-size: 0.75rem; }
+
+  .risk-score-pill{
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    background: rgba(184,48,47,0.12);
+    color: var(--red);
+  }
+
+  .filter-row{
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .filter-btn{
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .filter-btn.active{
+    background: var(--teal);
+    color: #fff;
+    border-color: var(--teal);
+  }
+
+  .customer-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: var(--teal-soft);
+    color: var(--teal);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .customer-chip button{
+    border: none;
+    background: none;
+    color: var(--teal);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+
+  .table-scroll{ overflow-x: auto; }
+
+  table{ width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+
+  th, td{
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  th{
+    font-size: 0.66rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--teal);
+    background: var(--teal-soft);
+  }
+
+  .status-badge{
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .status-low{ background: rgba(63,143,95,0.12); color: var(--green); }
+  .status-medium{ background: rgba(201,138,39,0.14); color: var(--amber); }
+  .status-high{ background: rgba(184,48,47,0.13); color: var(--red); }
+
+  .export-btn{
+    margin-top: 12px;
+    padding: 9px 16px;
+    border: 1px solid var(--teal);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--teal);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .export-btn:hover{ background: var(--teal); color: #fff; }
+
+  footer{
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 18px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ChurnMetrics</h1>
+  <p>Telecom Customer Churn Risk Monitor</p>
+</header>
+
+<main>
+
+  <p class="intro">
+    Every customer is scored 0&ndash;100 based on five churn signals:
+    <strong>short tenure</strong> (under 6 months),
+    <strong>declining data usage</strong>,
+    <strong>frequent support complaints</strong>,
+    <strong>late or missed payments</strong>, and
+    <strong>prepaid plans</strong> (which churn more easily than postpaid contracts).
+    Scores of 60+ are high risk, 30&ndash;59 medium, and below 30 low.
+  </p>
+
+  <div class="actions">
+    <button class="regen-btn" id="regenBtn">Generate new batch</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Customers</div>
+      <div class="kpi-value" id="kpiTotal">0</div>
+    </div>
+    <div class="kpi-card high">
+      <div class="kpi-label">High Risk</div>
+      <div class="kpi-value" id="kpiHigh">0</div>
+      <div class="kpi-sub" id="kpiHighRate"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg ARPU</div>
+      <div class="kpi-value" id="kpiArpu">P0</div>
+      <div class="kpi-sub">per customer / month</div>
+    </div>
+    <div class="kpi-card revenue">
+      <div class="kpi-label">Revenue at Risk</div>
+      <div class="kpi-value" id="kpiRevenue">P0</div>
+      <div class="kpi-sub">monthly, high-risk customers</div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2>Churn Rate Trend</h2>
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  </section>
+
+  <div class="panel-row">
+    <section class="panel half">
+      <h2>Risk Score Distribution</h2>
+      <div class="chart-wrap small"><canvas id="distChart"></canvas></div>
+    </section>
+    <section class="panel half">
+      <h2>By Package Tier</h2>
+      <div class="chart-wrap small"><canvas id="packageChart"></canvas></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Highest-Risk Customers</h2>
+    <p class="intro" style="margin-bottom:10px;">Ranked by churn risk score. Tap a customer to filter the table below.</p>
+    <div id="riskCustomers" class="risk-list"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Customer Log</h2>
+    <div class="filter-row" id="filterRow">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="high">High Risk</button>
+      <button class="filter-btn" data-filter="medium">Medium</button>
+      <button class="filter-btn" data-filter="low">Low Risk</button>
+      <span id="customerChipWrap"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Customer</th><th>Package</th><th>Plan</th><th>Tenure</th><th>Usage Trend</th><th>Complaints</th><th>Payment</th><th>ARPU</th><th>Score</th><th>Risk</th></tr>
+        </thead>
+        <tbody id="custBody"></tbody>
+      </table>
+    </div>
+    <button class="export-btn" id="exportBtn">Export PDF</button>
+  </section>
+
+</main>
+
+<footer>ChurnMetrics</footer>
+
+<script>
+  const PACKAGES = {
+    Basic:    { arpuMin: 80,  arpuMax: 150 },
+    Standard: { arpuMin: 150, arpuMax: 300 },
+    Premium:  { arpuMin: 300, arpuMax: 600 },
+  };
+  const PLANS = ['Prepaid','Postpaid'];
+  const PAYMENT_STATUSES = ['On-time','Late','Missed'];
+  const NAMES = ['T. Kgosi','B. Sento','N. Phiri','L. Modise','K. Moremi','O. Tau','M. Dube','R. Setlhare','P. Nkomo','A. Mogae','S. Letsholo','C. Ramotswe','J. Molefe','D. Seretse','G. Tlale'];
+
+  const CHART_FONT = { color: '#7a9290' };
+  const charts = { trend: null, dist: null, pkg: null };
+
+  let customers = [];
+  let statusFilter = 'all';
+  let customerFilter = null;
+
+  function seededRandom(seed){
+    let s = seed;
+    return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  }
+
+  function generate(n, seed){
+    const rand = seededRandom(seed);
+    const list = [];
+    const packageNames = Object.keys(PACKAGES);
+
+    for(let i = 0; i < n; i++){
+      const name = NAMES[Math.floor(rand() * NAMES.length)];
+      const pkg = packageNames[Math.floor(rand() * packageNames.length)];
+      const plan = rand() < 0.45 ? 'Prepaid' : 'Postpaid';
+      const tenure = Math.floor(1 + rand() * 60);
+
+      // usage trend: % change vs previous period, mostly small, sometimes a sharp drop
+      let usageChange;
+      if(rand() < 0.2) usageChange = Math.round(-50 + rand() * 30); // sharp decline
+      else usageChange = Math.round(-15 + rand() * 35);
+
+      const complaints = rand() < 0.15 ? Math.floor(3 + rand() * 4) : Math.floor(rand() * 3);
+
+      let payment;
+      const pr = rand();
+      if(pr < 0.75) payment = 'On-time';
+      else if(pr < 0.92) payment = 'Late';
+      else payment = 'Missed';
+
+      const range = PACKAGES[pkg];
+      const arpu = Math.round(range.arpuMin + rand() * (range.arpuMax - range.arpuMin));
+
+      let score = 0;
+      if(tenure < 6) score += 20;
+      if(usageChange < -20) score += 25;
+      else if(usageChange < -10) score += 12;
+      if(complaints >= 3) score += 20;
+      else if(complaints >= 1) score += 8;
+      if(payment === 'Missed') score += 25;
+      else if(payment === 'Late') score += 10;
+      if(plan === 'Prepaid') score += 10;
+      score += Math.floor(rand() * 10);
+      score = Math.min(score, 100);
+
+      let risk = 'low';
+      if(score >= 60) risk = 'high';
+      else if(score >= 30) risk = 'medium';
+
+      list.push({ name, pkg, plan, tenure, usageChange, complaints, payment, arpu, score, risk });
+    }
+    return list;
+  }
+
+  function generateTrend(seed){
+    const rand = seededRandom(seed);
+    const months = ['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+    let rate = 3 + rand() * 1.5;
+    return months.map(m => {
+      rate = Math.max(1, rate + (rand() - 0.5) * 1.2);
+      return { month: m, rate: Math.round(rate * 10) / 10 };
+    });
+  }
+
+  function renderKpis(){
+    const total = customers.length;
+    const high = customers.filter(c => c.risk === 'high').length;
+    const avgArpu = Math.round(customers.reduce((a,c) => a + c.arpu, 0) / total);
+    const revenueAtRisk = customers.filter(c => c.risk === 'high').reduce((a,c) => a + c.arpu, 0);
+
+    document.getElementById('kpiTotal').textContent = total;
+    document.getElementById('kpiHigh').textContent = high;
+    document.getElementById('kpiHighRate').textContent = `${((high/total)*100).toFixed(1)}% of total`;
+    document.getElementById('kpiArpu').textContent = `P${avgArpu}`;
+    document.getElementById('kpiRevenue').textContent = `P${revenueAtRisk.toLocaleString()}`;
+  }
+
+  function renderTrendChart(trend){
+    if(charts.trend) charts.trend.destroy();
+    charts.trend = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trend.map(t => t.month),
+        datasets: [{
+          data: trend.map(t => t.rate),
+          borderColor: '#0f6f6a',
+          backgroundColor: 'rgba(15,111,106,0.10)',
+          tension: 0.3,
+          fill: true,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: CHART_FONT, grid: { display: false } },
+          y: { ticks: { ...CHART_FONT, callback: v => `${v}%` }, grid: { color: '#dcebe9' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  function renderDistChart(){
+    const buckets = [0,0,0,0,0];
+    customers.forEach(c => buckets[Math.min(Math.floor(c.score / 20), 4)]++);
+
+    if(charts.dist) charts.dist.destroy();
+    charts.dist = new Chart(document.getElementById('distChart'), {
+      type: 'bar',
+      data: {
+        labels: ['0-20','21-40','41-60','61-80','81-100'],
+        datasets: [{ data: buckets, backgroundColor: ['#3f8f5f','#3f8f5f','#c98a27','#b8302f','#b8302f'] }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: CHART_FONT, grid: { display: false } },
+          y: { ticks: { ...CHART_FONT, stepSize: 4 }, grid: { color: '#dcebe9' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  function renderPackageChart(){
+    const counts = { Basic: 0, Standard: 0, Premium: 0 };
+    customers.forEach(c => counts[c.pkg]++);
+
+    if(charts.pkg) charts.pkg.destroy();
+    charts.pkg = new Chart(document.getElementById('packageChart'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(counts),
+        datasets: [{
+          data: Object.values(counts),
+          backgroundColor: ['#0f6f6a','#14b8a6','#9fd9d3'],
+          borderColor: '#fff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { color: '#0f6f6a', font: { size: 10 }, boxWidth: 12 } } }
+      }
+    });
+  }
+
+  function renderRiskCustomers(){
+    const top = customers
+      .slice()
+      .sort((a,b) => b.score - a.score)
+      .slice(0, 5);
+
+    const riskList = document.getElementById('riskCustomers');
+    riskList.innerHTML = '';
+    top.forEach((c, idx) => {
+      const key = `${c.name}-${idx}`;
+      const div = document.createElement('div');
+      div.className = 'risk-item' + (customerFilter === key ? ' active' : '');
+      div.innerHTML = `
+        <div>
+          <div class="name">${c.name}</div>
+          <div class="count">${c.pkg} &middot; ${c.plan} &middot; ${c.tenure}mo tenure</div>
+        </div>
+        <div class="risk-score-pill">${c.score}</div>
+      `;
+      div.addEventListener('click', () => {
+        customerFilter = (customerFilter === key) ? null : key;
+        currentChipName = c.name;
+        renderRiskCustomers();
+        renderCustomerChip();
+        renderTable();
+      });
+      riskList.appendChild(div);
+    });
+  }
+
+  let currentChipName = null;
+
+  function renderCustomerChip(){
+    const wrap = document.getElementById('customerChipWrap');
+    if(!customerFilter){ wrap.innerHTML = ''; return; }
+    wrap.innerHTML = `<span class="customer-chip">${currentChipName} <button id="clearCustomerBtn">&times;</button></span>`;
+    document.getElementById('clearCustomerBtn').addEventListener('click', () => {
+      customerFilter = null;
+      renderRiskCustomers();
+      renderCustomerChip();
+      renderTable();
+    });
+  }
+
+  function renderTable(){
+    const body = document.getElementById('custBody');
+    body.innerHTML = '';
+
+    let filtered = statusFilter === 'all' ? customers : customers.filter(c => c.risk === statusFilter);
+    if(customerFilter) filtered = filtered.filter(c => c.name === currentChipName);
+
+    filtered.slice(0, 40).forEach(c => {
+      const tr = document.createElement('tr');
+      const usageLabel = `${c.usageChange > 0 ? '+' : ''}${c.usageChange}%`;
+      tr.innerHTML = `
+        <td>${c.name}</td>
+        <td>${c.pkg}</td>
+        <td>${c.plan}</td>
+        <td>${c.tenure}mo</td>
+        <td>${usageLabel}</td>
+        <td>${c.complaints}</td>
+        <td>${c.payment}</td>
+        <td>P${c.arpu}</td>
+        <td>${c.score}</td>
+        <td><span class="status-badge status-${c.risk}">${c.risk}</span></td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+
+  function renderAll(seed){
+    const trend = generateTrend(seed);
+    renderKpis();
+    renderTrendChart(trend);
+    renderDistChart();
+    renderPackageChart();
+    renderRiskCustomers();
+    renderCustomerChip();
+    renderTable();
+  }
+
+  document.getElementById('filterRow').addEventListener('click', (e) => {
+    if(!e.target.classList.contains('filter-btn')) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    statusFilter = e.target.dataset.filter;
+    renderTable();
+  });
+
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const total = customers.length;
+    const high = customers.filter(c => c.risk === 'high').length;
+    const medium = customers.filter(c => c.risk === 'medium').length;
+    const low = total - high - medium;
+    const avgArpu = Math.round(customers.reduce((a,c) => a + c.arpu, 0) / total);
+    const revenueAtRisk = customers.filter(c => c.risk === 'high').reduce((a,c) => a + c.arpu, 0);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(15, 111, 106);
+    doc.text('ChurnMetrics', 14, 18);
+
+    doc.setFontSize(11);
+    doc.setTextColor(120);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Telecom Customer Churn Risk Report', 14, 25);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 31);
+
+    doc.autoTable({
+      startY: 38,
+      head: [['Total Customers', 'High Risk', 'Medium Risk', 'Low Risk', 'Avg ARPU', 'Revenue at Risk']],
+      body: [[
+        total,
+        `${high} (${((high/total)*100).toFixed(1)}%)`,
+        medium,
+        low,
+        `P${avgArpu}`,
+        `P${revenueAtRisk.toLocaleString()}`
+      ]],
+      theme: 'grid',
+      headStyles: { fillColor: [15,111,106], textColor: 255, fontSize: 8, halign: 'center' },
+      styles: { fontSize: 9, halign: 'center' },
+    });
+
+    const tableData = customers
+      .slice()
+      .sort((a,b) => b.score - a.score)
+      .map(c => [
+        c.name, c.pkg, c.plan, `${c.tenure}mo`,
+        `${c.usageChange > 0 ? '+' : ''}${c.usageChange}%`,
+        c.complaints, c.payment, `P${c.arpu}`, c.score,
+        c.risk.charAt(0).toUpperCase() + c.risk.slice(1)
+      ]);
+
+    doc.autoTable({
+      startY: doc.lastAutoTable.finalY + 10,
+      head: [['Customer','Package','Plan','Tenure','Usage Trend','Complaints','Payment','ARPU','Score','Risk']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [15,111,106], textColor: 255, fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      didParseCell: (data) => {
+        if(data.section === 'body' && data.column.index === 9){
+          const risk = data.cell.raw;
+          if(risk === 'High') data.cell.styles.textColor = [184,48,47];
+          else if(risk === 'Medium') data.cell.styles.textColor = [201,138,39];
+          else data.cell.styles.textColor = [63,143,95];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    });
+
+    doc.save('churnmetrics_report.pdf');
+  });
+
+  document.getElementById('regenBtn').addEventListener('click', () => {
+    const newSeed = Math.floor(Math.random() * 100000) + 1;
+    customers = generate(60, newSeed);
+    statusFilter = 'all';
+    customerFilter = null;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+    renderAll(newSeed + 1);
+  });
+
+  // init
+  customers = generate(60, 11);
+  renderAll(12);
+</script>
+
+</body>
+</html>
